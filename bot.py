@@ -25,7 +25,6 @@ TOKEN = "5555514033:AAHyFSg590H6axuO6K1tT-InZQNq7WRWQcw"
     LAP_PILIH_RIDER, LAP_INPUT_TANGGAL
 ) = range(8)
 
-# Set Proxy PythonAnywhere untuk requests ke Apps Script
 PROXIES = {
     'http': 'http://proxy.server:3128',
     'https': 'http://proxy.server:3128'
@@ -443,9 +442,9 @@ async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    builder = Application.builder().token(TOKEN)
+    # Mematikan job_queue agar pytz error hilang total
+    builder = Application.builder().token(TOKEN).job_queue(None)
     
-    # Jika berjalan di server PythonAnywhere, pasang proxy HTTPXRequest
     if os.path.exists('/etc/pythonanywhere/'):
         req = HTTPXRequest(http_version="1.1", proxy="http://proxy.server:3128")
         builder.request(req).get_updates_request(req)
