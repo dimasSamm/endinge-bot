@@ -2,7 +2,6 @@ import logging
 import requests
 import datetime
 import os
-import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -443,13 +442,11 @@ async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    builder = Application.builder().token(TOKEN)
-    
     if os.path.exists('/etc/pythonanywhere/'):
         req = HTTPXRequest(http_version="1.1", proxy="http://proxy.server:3128")
-        builder.request(req).get_updates_request(req)
-
-    app = builder.build()
+        app = Application.builder().token(TOKEN).request(req).get_updates_request(req).build()
+    else:
+        app = Application.builder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
