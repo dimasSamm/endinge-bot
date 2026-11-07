@@ -2,6 +2,7 @@ import logging
 import requests
 import datetime
 import os
+import urllib3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -12,7 +13,7 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-from telegram.request import HTTPXRequest
+from telegram.request import BaseRequest, RequestData
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -24,6 +25,25 @@ TOKEN = "5555514033:AAHyFSg590H6axuO6K1tT-InZQNq7WRWQcw"
     POS_PILIH_MENU, POS_PILIH_VARIAN, POS_INPUT_JUMLAH, POS_KONFIRMASI_KERANJANG,
     LAP_PILIH_RIDER, LAP_INPUT_TANGGAL
 ) = range(8)
+
+# --- PROXY REQUEST CLASS UNTUK PYTHONANYWHERE ---
+class PyAnywhereRequest(BaseRequest):
+    def __init__(self):
+        super().__init__()
+        proxy_url = "http://proxy.server:3128" if os.path.exists('/etc/pythonanywhere/') else None
+        if proxy_url:
+            self._http = urllib3.ProxyManager(proxy_url)
+        else:
+            self._http = urllib3.PoolManager()
+
+    async def initialize(self): pass
+    async def shutdown(self): pass
+
+    async def do_request(self, url: str, method: str, request_data: RequestData = None, timeout: float = None) -> tuple[int, bytes]:
+        headers = request_data.headers if request_data else {}
+        body = request_data.body if request_data else None
+        res = self._http.request(method, url, headers=headers, body=body, timeout=timeout)
+        return res.status, res.data
 
 # --- FETCH DATA DARI GOOGLE SHEETS ---
 
@@ -445,14 +465,8 @@ async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    # Set proxy otomatis untuk PythonAnywhere tanpa lewat HTTPXRequest
-    if os.path.exists('/etc/pythonanywhere/'):
-        os.environ['HTTP_PROXY'] = 'http://proxy.server:3128'
-        os.environ['HTTPS_PROXY'] = 'http://proxy.server:3128'
-        os.environ['http_proxy'] = 'http://proxy.server:3128'
-        os.environ['https_proxy'] = 'http://proxy.server:3128'
-
-    app = Application.builder().token(TOKEN).build()
+    custom_request = PyAnywhereRequest()
+    app = Application.builder().token(TOKEN).request(custom_request).get_updates_request(custom_request).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
@@ -478,7 +492,7 @@ def main():
     )
 
     app.add_handler(conv_handler)
-    print("Bot Keranjang Multi-Menu Berjalan di PythonAnywhere...")
+    print("Bot Keranjang Multi-Menu Berjalan...")
     app.run_polling()
 
 if __name__ == '__main__':
