@@ -2,7 +2,7 @@ import logging
 import requests
 import datetime
 import os
-import urllib3
+import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -13,7 +13,7 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-from telegram.request import BaseRequest, RequestData
+from telegram.request import HTTPXRequest
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -25,25 +25,6 @@ TOKEN = "5555514033:AAHyFSg590H6axuO6K1tT-InZQNq7WRWQcw"
     POS_PILIH_MENU, POS_PILIH_VARIAN, POS_INPUT_JUMLAH, POS_KONFIRMASI_KERANJANG,
     LAP_PILIH_RIDER, LAP_INPUT_TANGGAL
 ) = range(8)
-
-# --- PROXY REQUEST CLASS UNTUK PYTHONANYWHERE ---
-class PyAnywhereRequest(BaseRequest):
-    def __init__(self):
-        super().__init__()
-        proxy_url = "http://proxy.server:3128" if os.path.exists('/etc/pythonanywhere/') else None
-        if proxy_url:
-            self._http = urllib3.ProxyManager(proxy_url)
-        else:
-            self._http = urllib3.PoolManager()
-
-    async def initialize(self): pass
-    async def shutdown(self): pass
-
-    async def do_request(self, url: str, method: str, request_data: RequestData = None, timeout: float = None) -> tuple[int, bytes]:
-        headers = request_data.headers if request_data else {}
-        body = request_data.body if request_data else None
-        res = self._http.request(method, url, headers=headers, body=body, timeout=timeout)
-        return res.status, res.data
 
 # --- FETCH DATA DARI GOOGLE SHEETS ---
 
@@ -465,8 +446,17 @@ async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    custom_request = PyAnywhereRequest()
-    app = Application.builder().token(TOKEN).request(custom_request).get_updates_request(custom_request).build()
+    if os.path.exists('/etc/pythonanywhere/'):
+        proxy_url = "http://proxy.server:3128"
+        t_req = HTTPXRequest(connection_pool_size=8)
+        # Menghubungkan httpx HTTPTransport proxy langsung ke client internal python-telegram-bot
+        t_req._client = httpx.AsyncClient(
+            transport=httpx.AsyncHTTPTransport(proxy=proxy_url),
+            timeout=httpx.Timeout(20.0)
+        )
+        app = Application.builder().token(TOKEN).request(t_req).get_updates_request(t_req).build()
+    else:
+        app = Application.builder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
