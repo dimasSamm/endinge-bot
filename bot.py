@@ -436,7 +436,8 @@ async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    t_request = HTTPXRequest(proxy_url="http://proxy.server:3128")
+    # Menggunakan proxy="http://proxy.server:3128" (bukan proxy_url)
+    t_request = HTTPXRequest(proxy="http://proxy.server:3128")
     app = Application.builder().token(TOKEN).request(t_request).build()
 
     conv_handler = ConversationHandler(
