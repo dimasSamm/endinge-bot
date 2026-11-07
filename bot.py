@@ -436,9 +436,13 @@ async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    # Menggunakan proxy="http://proxy.server:3128" (bukan proxy_url)
-    t_request = HTTPXRequest(proxy="http://proxy.server:3128")
-    app = Application.builder().token(TOKEN).request(t_request).build()
+    # Menggunakan HTTPXRequest dengan proxy string yang didukung python-telegram-bot v20+
+    t_request = HTTPXRequest(
+        proxy_url="http://proxy.server:3128",
+        connect_timeout=20.0,
+        read_timeout=20.0
+    )
+    app = Application.builder().token(TOKEN).request(t_request).get_updates_request(t_request).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
