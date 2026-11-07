@@ -1,6 +1,7 @@
 import logging
 import requests
 import datetime
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -23,6 +24,8 @@ TOKEN = "5555514033:AAHyFSg590H6axuO6K1tT-InZQNq7WRWQcw"
     POS_PILIH_MENU, POS_PILIH_VARIAN, POS_INPUT_JUMLAH, POS_KONFIRMASI_KERANJANG,
     LAP_PILIH_RIDER, LAP_INPUT_TANGGAL
 ) = range(8)
+
+# --- FETCH DATA DARI GOOGLE SHEETS ---
 
 def get_users_from_sheet():
     try:
@@ -85,6 +88,8 @@ def get_penjualan_from_sheet():
         print("Error fetch penjualan:", e)
         return []
 
+# --- ALUR UTAMA BOT ---
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("☕ *ENDINGE ES KOPI BOT*\n\nSilakan masukkan PIN Login Anda:", parse_mode='Markdown')
     return LOGIN_PIN
@@ -131,6 +136,8 @@ async def check_pin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ PIN salah atau belum terdaftar di Google Sheets!")
         return LOGIN_PIN
+
+# --- FITUR SUPERUSER (INLINE) ---
 
 async def cb_laporan_penjualan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -249,6 +256,8 @@ async def cb_total_penghasilan(update: Update, context: ContextTypes.DEFAULT_TYP
     buttons = [[InlineKeyboardButton("🔙 Kembali ke Menu Utama", callback_data="back_to_main")]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
+
+# --- FITUR RIDER: KERANJANG BELANJA & INPUT MULTI-MENU ---
 
 async def cb_start_pos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -436,13 +445,14 @@ async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 def main():
-    # Menggunakan HTTPXRequest dengan proxy string yang didukung python-telegram-bot v20+
-    t_request = HTTPXRequest(
-        proxy_url="http://proxy.server:3128",
-        connect_timeout=20.0,
-        read_timeout=20.0
-    )
-    app = Application.builder().token(TOKEN).request(t_request).get_updates_request(t_request).build()
+    # Set proxy otomatis untuk PythonAnywhere tanpa lewat HTTPXRequest
+    if os.path.exists('/etc/pythonanywhere/'):
+        os.environ['HTTP_PROXY'] = 'http://proxy.server:3128'
+        os.environ['HTTPS_PROXY'] = 'http://proxy.server:3128'
+        os.environ['http_proxy'] = 'http://proxy.server:3128'
+        os.environ['https_proxy'] = 'http://proxy.server:3128'
+
+    app = Application.builder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
