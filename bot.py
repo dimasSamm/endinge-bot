@@ -4,14 +4,15 @@ import datetime
 import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
     MessageHandler,
-    Filters,
     ConversationHandler,
     CallbackQueryHandler,
-    CallbackContext,
+    filters,
+    ContextTypes,
 )
+from telegram.request import HTTPXRequest
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -24,7 +25,7 @@ TOKEN = "5555514033:AAHyFSg590H6axuO6K1tT-InZQNq7WRWQcw"
     LAP_PILIH_RIDER, LAP_INPUT_TANGGAL
 ) = range(8)
 
-# Set Proxy PythonAnywhere untuk requests
+# Set Proxy PythonAnywhere untuk requests ke Apps Script
 PROXIES = {
     'http': 'http://proxy.server:3128',
     'https': 'http://proxy.server:3128'
@@ -91,11 +92,11 @@ def get_penjualan_from_sheet():
         print("Error fetch penjualan:", e)
         return []
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("☕ *ENDINGE ES KOPI BOT*\n\nSilakan masukkan PIN Login Anda:", parse_mode='Markdown')
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("☕ *ENDINGE ES KOPI BOT*\n\nSilakan masukkan PIN Login Anda:", parse_mode='Markdown')
     return LOGIN_PIN
 
-def check_pin(update: Update, context: CallbackContext):
+async def check_pin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pin_input = update.message.text.strip()
     users_db = get_users_from_sheet()
     
@@ -112,7 +113,7 @@ def check_pin(update: Update, context: CallbackContext):
                 [InlineKeyboardButton("🚪 Keluar / Logout", callback_data="app_logout")]
             ]
             markup = InlineKeyboardMarkup(buttons)
-            update.message.reply_text(
+            await update.message.reply_text(
                 f"👤 *Halo, Superuser {nama}!*\n\n"
                 f"Status: `Active Superuser`\n"
                 f"Sistem siap digunakan. Pilih menu di bawah ini:",
@@ -126,7 +127,7 @@ def check_pin(update: Update, context: CallbackContext):
                 [InlineKeyboardButton("🚪 Keluar / Logout", callback_data="app_logout")]
             ]
             markup = InlineKeyboardMarkup(buttons)
-            update.message.reply_text(
+            await update.message.reply_text(
                 f"🛵 *Halo, Rider {nama}!*\n\n"
                 f"Status: `Active Rider`\n"
                 f"Silakan tekan tombol di bawah untuk mencatat penjualan:",
@@ -135,12 +136,12 @@ def check_pin(update: Update, context: CallbackContext):
             )
             return MENU_ACTIVE
     else:
-        update.message.reply_text("❌ PIN salah atau belum terdaftar di Google Sheets!")
+        await update.message.reply_text("❌ PIN salah atau belum terdaftar di Google Sheets!")
         return LOGIN_PIN
 
-def cb_laporan_penjualan(update: Update, context: CallbackContext):
+async def cb_laporan_penjualan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     users_db = get_users_from_sheet()
     buttons = [[InlineKeyboardButton("Semua Rider", callback_data="lap_rider_ALL")]]
@@ -150,18 +151,18 @@ def cb_laporan_penjualan(update: Update, context: CallbackContext):
             buttons.append([InlineKeyboardButton(f"Rider: {u['nama']}", callback_data=f"lap_rider_{u['nama']}")])
             
     buttons.append([InlineKeyboardButton("🔙 Kembali ke Menu Utama", callback_data="back_to_main")])
-    query.edit_message_text("📊 *CEK LAPORAN PENJUALAN*\n\nPilih Rider yang ingin dicek laporannya:", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await query.edit_message_text("📊 *CEK LAPORAN PENJUALAN*\n\nPilih Rider yang ingin dicek laporannya:", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def callback_pilih_rider(update: Update, context: CallbackContext):
+async def callback_pilih_rider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     rider_selected = query.data.split("lap_rider_")[1]
     context.user_data['filter_rider'] = rider_selected
     
     today_str = datetime.datetime.now().strftime("%d/%m/%Y")
-    query.edit_message_text(
+    await query.edit_message_text(
         f"Rider terpilih: *{rider_selected}*\n\n"
         f"Ketikkan tanggal yang ingin dicek di kolom pesan (Format `DD/MM/YYYY`)\n"
         f"_(Contoh: `{today_str}` atau ketik `ALL` untuk semua tanggal)_:",
@@ -169,7 +170,7 @@ def callback_pilih_rider(update: Update, context: CallbackContext):
     )
     return LAP_INPUT_TANGGAL
 
-def show_laporan_penjualan(update: Update, context: CallbackContext):
+async def show_laporan_penjualan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tgl_input = update.message.text.strip()
     rider_selected = context.user_data.get('filter_rider', 'ALL')
     
@@ -205,12 +206,12 @@ def show_laporan_penjualan(update: Update, context: CallbackContext):
         text_res += f"\n------------------------------------\n💰 *Total Omset Penjualan: Rp {total_omset:,}*"
         
     buttons = [[InlineKeyboardButton("🔙 Kembali ke Menu Utama", callback_data="back_to_main")]]
-    update.message.reply_text(text_res, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await update.message.reply_text(text_res, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def cb_stok_bahan(update: Update, context: CallbackContext):
+async def cb_stok_bahan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     bahan_list = get_bahan_from_sheet()
     text = "📦 *STOK BAHAN TERSISA (GOOGLE SHEETS)*\n------------------------------------\n"
@@ -221,12 +222,12 @@ def cb_stok_bahan(update: Update, context: CallbackContext):
             text += f"• *{b['nama']}*: {b['stok']} {b['satuan']}\n"
             
     buttons = [[InlineKeyboardButton("🔙 Kembali ke Menu Utama", callback_data="back_to_main")]]
-    query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def cb_total_penghasilan(update: Update, context: CallbackContext):
+async def cb_total_penghasilan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     rows = get_penjualan_from_sheet()
     total_omset = 0
@@ -253,12 +254,12 @@ def cb_total_penghasilan(update: Update, context: CallbackContext):
         f"🎯 *Laba Bersih Estimasi: Rp {laba_bersih:,}*"
     )
     buttons = [[InlineKeyboardButton("🔙 Kembali ke Menu Utama", callback_data="back_to_main")]]
-    query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def cb_start_pos(update: Update, context: CallbackContext):
+async def cb_start_pos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     context.user_data['cart'] = []
         
@@ -266,7 +267,7 @@ def cb_start_pos(update: Update, context: CallbackContext):
     context.user_data['menu_db'] = menu_db
     
     if not menu_db:
-        query.edit_message_text("❌ Gagal mengambil menu. Pastikan Tab 'Menu' di Google Sheets terisi.")
+        await query.edit_message_text("❌ Gagal mengambil menu. Pastikan Tab 'Menu' di Google Sheets terisi.")
         return MENU_ACTIVE
 
     buttons = []
@@ -274,12 +275,12 @@ def cb_start_pos(update: Update, context: CallbackContext):
         buttons.append([InlineKeyboardButton(m_nama, callback_data=f"posmenu_{m_nama}")])
         
     buttons.append([InlineKeyboardButton("🔙 Batal Transaksi", callback_data="back_to_main")])
-    query.edit_message_text("📋 *PILIH MENU MINUMAN:*", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await query.edit_message_text("📋 *PILIH MENU MINUMAN:*", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def callback_pos_menu(update: Update, context: CallbackContext):
+async def callback_pos_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     menu_nama = query.data.split("posmenu_")[1]
     context.user_data['pos_menu'] = menu_nama
@@ -291,28 +292,28 @@ def callback_pos_menu(update: Update, context: CallbackContext):
         buttons.append([InlineKeyboardButton(f"Varian {var} (Rp {harga:,})", callback_data=f"posvar_{var}")])
         
     buttons.append([InlineKeyboardButton("🔙 Batal", callback_data="back_to_main")])
-    query.edit_message_text(f"🥤 Menu: *{menu_nama}*\n\nPilih Varian Ukuran:", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await query.edit_message_text(f"🥤 Menu: *{menu_nama}*\n\nPilih Varian Ukuran:", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def callback_pos_varian(update: Update, context: CallbackContext):
+async def callback_pos_varian(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     varian = query.data.split("posvar_")[1]
     context.user_data['pos_varian'] = varian
     menu_nama = context.user_data['pos_menu']
     
-    query.edit_message_text(
+    await query.edit_message_text(
         f"Menu terpilih: *{menu_nama} {varian}*\n\n"
         f"Ketikkan *JUMLAH PESANAN* di kolom pesan (angka saja):",
         parse_mode='Markdown'
     )
     return POS_INPUT_JUMLAH
 
-def add_to_cart(update: Update, context: CallbackContext):
+async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     jumlah_str = update.message.text.strip()
     if not jumlah_str.isdigit():
-        update.message.reply_text("❌ Masukkan angka jumlah yang valid:")
+        await update.message.reply_text("❌ Masukkan angka jumlah yang valid:")
         return POS_INPUT_JUMLAH
     
     jumlah = int(jumlah_str)
@@ -348,12 +349,12 @@ def add_to_cart(update: Update, context: CallbackContext):
         [InlineKeyboardButton("✅ Selesai & Simpan Struk", callback_data="cart_finish")]
     ]
     
-    update.message.reply_text(text_cart, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await update.message.reply_text(text_cart, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def cb_cart_add_more(update: Update, context: CallbackContext):
+async def cb_cart_add_more(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     menu_db = get_menu_with_varian()
     context.user_data['menu_db'] = menu_db
@@ -363,16 +364,16 @@ def cb_cart_add_more(update: Update, context: CallbackContext):
         buttons.append([InlineKeyboardButton(m_nama, callback_data=f"posmenu_{m_nama}")])
         
     buttons.append([InlineKeyboardButton("🔙 Batal", callback_data="back_to_main")])
-    query.edit_message_text("📋 *PILIH MENU TAMBAHAN:*", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await query.edit_message_text("📋 *PILIH MENU TAMBAHAN:*", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def cb_cart_finish(update: Update, context: CallbackContext):
+async def cb_cart_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     cart_items = context.user_data.get('cart', [])
     if not cart_items:
-        query.edit_message_text("❌ Keranjang belanja kosong.")
+        await query.edit_message_text("❌ Keranjang belanja kosong.")
         return MENU_ACTIVE
         
     rider_nama = context.user_data['user_info']['nama']
@@ -405,12 +406,12 @@ def cb_cart_finish(update: Update, context: CallbackContext):
         [InlineKeyboardButton("🚪 Keluar / Logout", callback_data="app_logout")]
     ]
     
-    query.edit_message_text(text_struk_final, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+    await query.edit_message_text(text_struk_final, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     return MENU_ACTIVE
 
-def cb_back_to_main(update: Update, context: CallbackContext):
+async def cb_back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     context.user_data['cart'] = []
     
@@ -424,35 +425,37 @@ def cb_back_to_main(update: Update, context: CallbackContext):
             [InlineKeyboardButton("📦 Stok Bahan", callback_data="super_stok"), InlineKeyboardButton("💰 Total Penghasilan", callback_data="super_profit")],
             [InlineKeyboardButton("🚪 Keluar / Logout", callback_data="app_logout")]
         ]
-        query.edit_message_text(f"👤 *Halo, Superuser {nama}!*\nPilih menu di bawah ini:", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+        await query.edit_message_text(f"👤 *Halo, Superuser {nama}!*\nPilih menu di bawah ini:", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
     else:
         buttons = [
             [InlineKeyboardButton("📝 Input Penjualan Baru", callback_data="rider_pos")],
             [InlineKeyboardButton("🚪 Keluar / Logout", callback_data="app_logout")]
         ]
-        query.edit_message_text(f"🛵 *Halo, Rider {nama}!*\nPilih menu di bawah ini:", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
+        await query.edit_message_text(f"🛵 *Halo, Rider {nama}!*\nPilih menu di bawah ini:", reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
         
     return MENU_ACTIVE
 
-def cb_logout(update: Update, context: CallbackContext):
+async def cb_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     context.user_data.clear()
-    query.edit_message_text("👋 Anda telah keluar dari sistem bot.")
+    await query.edit_message_text("👋 Anda telah keluar dari sistem bot.")
     return ConversationHandler.END
 
 def main():
-    request_kwargs = {}
+    builder = Application.builder().token(TOKEN)
+    
+    # Jika berjalan di server PythonAnywhere, pasang proxy HTTPXRequest
     if os.path.exists('/etc/pythonanywhere/'):
-        request_kwargs['proxy_url'] = 'http://proxy.server:3128/'
+        req = HTTPXRequest(http_version="1.1", proxy="http://proxy.server:3128")
+        builder.request(req).get_updates_request(req)
 
-    updater = Updater(token=TOKEN, request_kwargs=request_kwargs, use_context=True)
-    dp = updater.dispatcher
+    app = builder.build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            LOGIN_PIN: [MessageHandler(Filters.text & ~Filters.command, check_pin)],
+            LOGIN_PIN: [MessageHandler(filters.TEXT & ~filters.COMMAND, check_pin)],
             MENU_ACTIVE: [
                 CallbackQueryHandler(cb_laporan_penjualan, pattern="^super_laporan$"),
                 CallbackQueryHandler(cb_stok_bahan, pattern="^super_stok$"),
@@ -466,16 +469,15 @@ def main():
                 CallbackQueryHandler(cb_logout, pattern="^app_logout$"),
                 CallbackQueryHandler(callback_pilih_rider, pattern="^lap_rider_")
             ],
-            POS_INPUT_JUMLAH: [MessageHandler(Filters.text & ~Filters.command, add_to_cart)],
-            LAP_INPUT_TANGGAL: [MessageHandler(Filters.text & ~Filters.command, show_laporan_penjualan)],
+            POS_INPUT_JUMLAH: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_to_cart)],
+            LAP_INPUT_TANGGAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, show_laporan_penjualan)],
         },
         fallbacks=[CommandHandler('start', start)],
     )
 
-    dp.add_handler(conv_handler)
-    print("Bot Keranjang Multi-Menu (v13) Berjalan di PythonAnywhere...")
-    updater.start_polling()
-    updater.idle()
+    app.add_handler(conv_handler)
+    print("Bot Keranjang Multi-Menu Berjalan...")
+    app.run_polling()
 
 if __name__ == '__main__':
     main()
